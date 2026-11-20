@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ágoge · claves VAPID</title>
+<style>body{background:#101315;color:#d3d7da;font:15px/1.5 system-ui,sans-serif;max-width:640px;margin:0 auto;padding:24px 16px}h1{font-size:20px;color:#f1f3f4}button{font:inherit;padding:10px 16px;background:#d3d7da;color:#111;border:0;cursor:pointer}textarea{width:100%;box-sizing:border-box;background:#0c0e0f;color:#d3d7da;border:1px solid #353c41;padding:10px;font:13px monospace;min-height:70px}label{display:block;margin:16px 0 4px;color:#8d949a;font-size:13px}.w{border-left:3px solid #c0625a;padding:8px 12px;background:#c0625a1a;margin-top:16px}</style></head>
+<body>
+<h1>Generar claves VAPID</h1>
+<p>Las claves se crean en este navegador y no se envían a ningún sitio. Si recargas la página se pierden: cópialas ahora.</p>
+<button id="go">Generar par de claves</button>
+<label for="pub">Clave pública → <b>config.js</b> (vapidPublicKey) y secreto VAPID_PUBLIC_KEY</label>
+<textarea id="pub" readonly></textarea>
+<label for="prv">Clave privada → solo secreto VAPID_PRIVATE_KEY en Supabase</label>
+<textarea id="prv" readonly></textarea>
+<div class="w">La clave privada no va nunca en el repositorio ni en config.js.</div>
+<script>
+function b64u(buf){var s="",a=new Uint8Array(buf);for(var i=0;i<a.length;i++)s+=String.fromCharCode(a[i]);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")}
+document.getElementById("go").onclick=function(){
+  crypto.subtle.generateKey({name:"ECDSA",namedCurve:"P-256"},true,["sign","verify"]).then(function(kp){
+    return Promise.all([crypto.subtle.exportKey("raw",kp.publicKey),crypto.subtle.exportKey("jwk",kp.privateKey)]);
+  }).then(function(r){document.getElementById("pub").value=b64u(r[0]);document.getElementById("prv").value=r[1].d});
+};
+</script>
+</body></html>

@@ -1,0 +1,58 @@
+// Ágoge como APK: una "Trusted Web Activity" que abre la app publicada en GitHub Pages
+// a pantalla completa. No contiene la app: la carga online, así que los cambios del
+// repositorio llegan sin reinstalar el APK.
+plugins {
+    id 'com.android.application'
+}
+
+def twaHost = (project.findProperty('twaHost') ?: 'example.github.io').toString()
+def twaPath = (project.findProperty('twaPath') ?: '/').toString()
+def ksFile = System.getenv('KS_FILE')
+
+android {
+    namespace 'app.agoge.twa'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'app.agoge.twa'
+        minSdk 23
+        targetSdk 34
+        versionCode((project.findProperty('vc') ?: '1').toString().toInteger())
+        versionName "1." + (project.findProperty('vc') ?: '0')
+        manifestPlaceholders = [
+            hostName  : twaHost,
+            twaPath   : twaPath,
+            defaultUrl: "https://" + twaHost + twaPath
+        ]
+        resValue "string", "assetStatements",
+            '[{ \\"relation\\": [\\"delegate_permission/common.handle_all_urls\\"],' +
+            ' \\"target\\": {\\"namespace\\": \\"web\\", \\"site\\": \\"https://' + twaHost + '\\"}}]'
+    }
+
+    signingConfigs {
+        release {
+            if (ksFile) {
+                storeFile file(ksFile)
+                storePassword System.getenv('KS_PASS')
+                keyAlias 'agoge'
+                keyPassword System.getenv('KS_PASS')
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ksFile) { signingConfig signingConfigs.release }
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'com.google.androidbrowserhelper:androidbrowserhelper:2.5.0'
+}

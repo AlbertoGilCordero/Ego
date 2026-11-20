@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.agoge.twa",
+      "sha256_cert_fingerprints": ["49:A4:81:F6:56:61:A0:E2:45:4A:8A:C4:6B:67:E7:63:71:51:F0:90:06:90:C8:61:89:BE:D8:F0:DC:70:15:3C"]
+    }
+  }
+]

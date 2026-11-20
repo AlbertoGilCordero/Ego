@@ -1,0 +1,65 @@
+name: Construir APK
+
+# Se lanza a mano (pestaña Actions → Construir APK → Run workflow)
+# y cada vez que cambia algo dentro de android/.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["android/**", ".github/workflows/apk.yml"]
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Preparar la clave de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Faltan los secretos KEYSTORE_B64 y KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/agoge-release.jks"
+
+      - name: Compilar y firmar
+        env:
+          KS_FILE: ${{ runner.temp }}/agoge-release.jks
+          KS_PASS: ${{ secrets.KEYSTORE_PASSWORD }}
+          OWNER: ${{ github.repository_owner }}
+          REPO: ${{ github.event.repository.name }}
+        run: |
+          HOST="${OWNER,,}.github.io"
+          if [ "${REPO,,}" = "$HOST" ]; then TWAPATH="/"; else TWAPATH="/${REPO}/"; fi
+          echo "La app abrirá https://${HOST}${TWAPATH}"
+          gradle -p android --no-daemon assembleRelease \
+            -PtwaHost="$HOST" -PtwaPath="$TWAPATH" -Pvc="${{ github.run_number }}"
+          cp android/app/build/outputs/apk/release/app-release.apk agoge.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agoge-apk
+          path: agoge.apk
+
+      - name: Publicar en Releases (descarga directa desde el móvil)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete apk --yes --cleanup-tag || true
+          gh release create apk agoge.apk --title "Ágoge APK (compilación ${{ github.run_number }})" \
+            --notes "Descarga agoge.apk en el móvil e instálalo. El contenido de la app se carga desde GitHub Pages."
