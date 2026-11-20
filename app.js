@@ -2,6 +2,7 @@
 (function(){
 "use strict";
 var P=window.AGOGE_PLAN,CFG=window.AGOGE_CONFIG||{};
+var VERSION="7 · 21 nov 00:10";
 var RANKS=P.ranks,M=P.missions,ORDER=P.order,FIN=P.fin,PROMPTS=P.prompts,AGON=P.agon,EIC=P.deadline,MIN_DAY=P.minDay;
 
 /* ---------- estado ---------- */
@@ -100,8 +101,8 @@ function viewHoy(){
   h+='</div></section>';
   // revisión
   h+='<section class="slab deco-cerebro"><div class="row"><h2>REVISIÓN DE LA NOCHE</h2><span class="eyebrow">+15 XP</span></div>';
-  if(d.rev)h+='<p class="mdesc" style="margin-top:8px">Hecha. Mañana empiezas por: <b style="color:var(--light)">'+esc(d.rev.first||"—")+'</b></p>';
-  else h+='<label for="rv1">¿Qué hice bien hoy?</label><textarea id="rv1"></textarea><label for="rv2">¿Qué corrijo mañana?</label><textarea id="rv2"></textarea><label for="rv3">Mañana, lo primero que hago es…</label><input type="text" id="rv3" placeholder="Si son las 9:00, entonces abro el EIC y escribo la sección 1"><label for="rv4">¿Hoy sin videojuegos, TikTok ni anime?</label><select id="rv4"><option value="1">Sí, día limpio</option><option value="0">No, he caído</option></select><div class="btns"><button class="btn solid" data-act="review">Cerrar el día</button></div>';
+  if(d.rev)h+='<p class="mdesc" style="margin-top:8px">Hecha. Mañana empiezas por: <b style="color:var(--light)">'+esc(d.rev.first||"—")+'</b></p><div class="btns"><button class="btn ghost" data-act="reopen">Reabrir el día</button></div>';
+  else{var dr=d.revDraft||{};h+='<label for="rv1">¿Qué hice bien hoy?</label><textarea id="rv1">'+esc(dr.good||"")+'</textarea><label for="rv2">¿Qué corrijo mañana?</label><textarea id="rv2">'+esc(dr.fix||"")+'</textarea><label for="rv3">Mañana, lo primero que hago es…</label><input type="text" id="rv3" value="'+esc(dr.first||"")+'" placeholder="Si son las 9:00, entonces abro el EIC y escribo la sección 1"><label for="rv4">¿Hoy sin videojuegos, TikTok ni anime?</label><select id="rv4"><option value="1">Sí, día limpio</option><option value="0"'+(dr.clean===false?" selected":"")+'>No, he caído</option></select><div class="btns"><button class="btn solid" data-act="review">Cerrar el día</button></div>'}
   h+='</section>';
   return h;
 }
@@ -155,6 +156,7 @@ function viewCodice(){
   C.forEach(function(c){h+='<details><summary>'+c[0]+'</summary><p>'+c[1]+'</p></details>'});
   h+='<section class="slab"><h2>TUS JURAMENTOS</h2><div class="list"><div class="oath"><b>Si me despierto,</b> entonces el móvil se queda cargando lejos de la cama y salgo a la luz.</div><div class="oath"><b>Si recibo un rechazo,</b> entonces abro Ágoge y pulso «Golpe recibido» antes de tocar nada más.</div></div></section>';
   h+=viewCuenta();
+  h+='<p class="eyebrow" style="text-align:center;margin:4px 0 0">Ágoge · versión '+VERSION+'</p>';
   return h;
 }
 function viewCuenta(){
@@ -333,7 +335,8 @@ document.addEventListener("click",function(e){
   else if(a==="done"){if(k==="voz"){d.m.voz=10}else d.m[k]=Math.max(d.m[k]||0,target(k));complete(k,d);save()}
   else if(a==="am"){d.am[k]=!d.am[k];if(d.am.phone&&d.am.light&&d.am.water&&!d.amxp){d.amxp=true;addXP(15,"Amanecer")}save()}
   else if(a==="agon"){var w=isoWeek();S.agon[w]=S.agon[w]||[];S.agon[w][+k]=!S.agon[w][+k];if([0,1,2].every(function(i){return S.agon[w][i]})&&!S.agon[w+"x"]){S.agon[w+"x"]=true;addXP(50,"Agón ganado")}save()}
-  else if(a==="review"){var f=document.getElementById("rv3").value.trim(),cl=document.getElementById("rv4").value==="1";d.rev={good:document.getElementById("rv1").value.trim().slice(0,400),fix:document.getElementById("rv2").value.trim().slice(0,400),first:f.slice(0,200),clean:cl};S.first=f.slice(0,200);addXP(15,"Día cerrado");if(!cl)setTimeout(function(){toast("Registrado. Una caída es un dato, no un veredicto.")},2800)}
+  else if(a==="reopen"){if(d.rev){d.revDraft=d.rev;d.revPaid=true;delete d.rev;save()}}
+  else if(a==="review"){var f=document.getElementById("rv3").value.trim(),cl=document.getElementById("rv4").value==="1";d.rev={good:document.getElementById("rv1").value.trim().slice(0,400),fix:document.getElementById("rv2").value.trim().slice(0,400),first:f.slice(0,200),clean:cl};S.first=f.slice(0,200);delete d.revDraft;if(d.revPaid){save();toast("Día cerrado de nuevo.")}else{d.revPaid=true;addXP(15,"Día cerrado")}if(!cl)setTimeout(function(){toast("Registrado. Una caída es un dato, no un veredicto.")},2800)}
   else if(a==="golpe"||a==="urge"){runProto(a);return}
   else if(a==="pnext"){proto.next();return}
   else if(a==="close"){closeOv();return}
