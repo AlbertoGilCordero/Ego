@@ -97,6 +97,17 @@ create policy agoge_push_delete on public.agoge_push
   for delete to authenticated
   using ((select auth.uid()) = user_id);
 
+-- Configuración privada de la función notify (alternativa a los secretos de Edge Functions).
+-- Sin políticas: solo la lee la clave service_role, desde dentro de la función.
+-- Filas esperadas: CRON_SECRET, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT.
+-- Los valores NO se guardan en este repositorio.
+create table if not exists public.agoge_secrets (
+  name  text primary key,
+  value text not null
+);
+alter table public.agoge_secrets enable row level security;
+revoke all on public.agoge_secrets from anon, authenticated;
+
 -- ======================= FIN DEL BLOQUE 1 ============================
 
 

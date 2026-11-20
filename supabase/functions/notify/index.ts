@@ -239,29 +239,38 @@ async function send(row, tag, body) {
 // ------------------------------------------------------------------- handler
 
 Deno.serve(async (req) => {
-  const cronSecret = Deno.env.get("CRON_SECRET") || "";
-  if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) {
-    return json({ error: "unauthorized" }, 401);
-  }
-
   const url = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-  const vapidPublic = Deno.env.get("VAPID_PUBLIC_KEY");
-  const vapidPrivate = Deno.env.get("VAPID_PRIVATE_KEY");
-  const vapidSubject = Deno.env.get("VAPID_SUBJECT");
-  if (!url || !serviceKey || !vapidPublic || !vapidPrivate || !vapidSubject) {
-    return json({ error: "missing environment variables" }, 500);
-  }
-
-  try {
-    webpush.setVapidDetails(vapidSubject.trim(), vapidPublic.trim(), vapidPrivate.trim());
-  } catch (e) {
-    return json({ error: "invalid VAPID configuration: " + (e && e.message ? e.message : String(e)) }, 500);
-  }
+  if (!url || !serviceKey) return json({ error: "missing environment variables" }, 500);
 
   const supabase = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  // Configuración: primero los secretos de la función; los que falten se leen de la
+  // tabla privada agoge_secrets (sin políticas: solo la ve la clave service_role).
+  const NAMES = ["CRON_SECRET", "VAPID_PUBLIC_KEY", "VAPID_PRIVATE_KEY", "VAPID_SUBJECT"];
+  const cfg = {};
+  for (const k of NAMES) cfg[k] = Deno.env.get(k) || "";
+  if (NAMES.some((k) => !cfg[k])) {
+    const sec = await supabase.from("agoge_secrets").select("name, value");
+    if (!sec.error) {
+      for (const r of sec.data || []) if (!cfg[r.name]) cfg[r.name] = r.value;
+    }
+  }
+
+  if (!cfg.CRON_SECRET || req.headers.get("x-cron-secret") !== cfg.CRON_SECRET) {
+    return json({ error: "unauthorized" }, 401);
+  }
+  if (!cfg.VAPID_PUBLIC_KEY || !cfg.VAPID_PRIVATE_KEY || !cfg.VAPID_SUBJECT) {
+    return json({ error: "missing VAPID configuration" }, 500);
+  }
+
+  try {
+    webpush.setVapidDetails(cfg.VAPID_SUBJECT.trim(), cfg.VAPID_PUBLIC_KEY.trim(), cfg.VAPID_PRIVATE_KEY.trim());
+  } catch (e) {
+    return json({ error: "invalid VAPID configuration: " + (e && e.message ? e.message : String(e)) }, 500);
+  }
 
   const subs = await supabase.from("agoge_push").select("*");
   if (subs.error) return json({ error: subs.error.message }, 500);
