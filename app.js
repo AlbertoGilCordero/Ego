@@ -217,6 +217,14 @@ function pushOn(){
     });
   }).catch(function(e){toast("No se pudo activar: "+(e&&e.message||"error"))});
 }
+/* S.push viaja con la copia del servidor, pero la suscripción es de cada instalación:
+   si este navegador no tiene ninguna, el interruptor vuelve a «desactivado». */
+function checkPush(){
+  if(!S||!S.push||!("serviceWorker" in navigator)||!("PushManager" in window))return;
+  navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()}).then(function(sub){
+    if(!sub&&S.push){S.push=false;try{localStorage.setItem("agoge",JSON.stringify(S))}catch(e){}if(tab==="codice")render()}
+  }).catch(function(){});
+}
 function pushOff(){
   navigator.serviceWorker.ready.then(function(reg){return reg.pushManager.getSubscription()}).then(function(sub){
     if(!sub)return;
@@ -357,11 +365,11 @@ function boot(){
   if(CFG.supabaseUrl&&CFG.supabaseAnonKey&&window.supabase&&window.supabase.createClient){
     try{sb=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseAnonKey)}catch(e){sb=null}
     if(sb){
-      sb.auth.getSession().then(function(r){user=(r.data&&r.data.session&&r.data.session.user)||null;if(user)pullState();else if(tab==="codice")render()},function(){});
+      sb.auth.getSession().then(function(r){user=(r.data&&r.data.session&&r.data.session.user)||null;if(user)pullState().then(checkPush);else if(tab==="codice")render()},function(){});
       sb.auth.onAuthStateChange(function(ev,session){var u=session&&session.user||null;if((u&&u.id)!==(user&&user.id)){user=u;if(tab==="codice")render()}});
     }
   }
-  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(user)pullState();else render();maybeAlba()}});
+  document.addEventListener("visibilitychange",function(){if(document.visibilityState==="visible"){if(user)pullState().then(checkPush);else render();maybeAlba()}});
 }
 boot();
 })();
