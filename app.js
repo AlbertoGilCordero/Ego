@@ -38,7 +38,7 @@ function save(){
   if(!sb||!user)return;
   clearTimeout(dirty);dirty=setTimeout(pushState,1200);
 }
-function toast(t){var el=document.getElementById("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){el.hidden=true},2600)}
+function toast(t,ms){var el=document.getElementById("toast");el.textContent=t;el.hidden=false;clearTimeout(toast.t);toast.t=setTimeout(function(){el.hidden=true},ms||2600)}
 function addXP(n,why){
   var before=lvl();S.xp+=n;day().xp+=n;save();
   toast("+"+n+" XP · "+why);
@@ -201,21 +201,31 @@ function auth(kind){
   },function(){toast("Sin conexión.")});
 }
 function u8(b){var p="=".repeat((4-b.length%4)%4),s=atob((b+p).replace(/-/g,"+").replace(/_/g,"/")),a=new Uint8Array(s.length);for(var i=0;i<s.length;i++)a[i]=s.charCodeAt(i);return a}
+/* Activación por etapas, con aviso de en cuál se queda si algo no responde. */
+function stage(p,ms,label){return new Promise(function(res,rej){var t=setTimeout(function(){rej(new Error("sin respuesta en: "+label))},ms);Promise.resolve(p).then(function(v){clearTimeout(t);res(v)},function(e){clearTimeout(t);rej(e)})})}
+function askPerm(){
+  if(Notification.permission==="granted")return Promise.resolve("granted");
+  return new Promise(function(res){var done=false,r;try{r=Notification.requestPermission(function(p){if(!done){done=true;res(p)}})}catch(e){res("error")}if(r&&r.then)r.then(function(p){if(!done){done=true;res(p)}},function(){if(!done){done=true;res("error")}})});
+}
 function pushOn(){
-  var am=document.getElementById("tam").value||"07:15",pm=document.getElementById("tpm").value||"21:15",gd=document.getElementById("tgd").value==="1";
-  S.am=am;S.pm=pm;S.guard=gd;
-  Notification.requestPermission().then(function(perm){
-    if(perm!=="granted"){toast("Permiso de notificaciones denegado. Actívalo en los ajustes del teléfono.");return}
-    return navigator.serviceWorker.ready.then(function(reg){
-      return reg.pushManager.getSubscription().then(function(sub){return sub||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(CFG.vapidPublicKey)})});
+  try{
+    var am=document.getElementById("tam").value||"07:15",pm=document.getElementById("tpm").value||"21:15",gd=document.getElementById("tgd").value==="1";
+    S.am=am;S.pm=pm;S.guard=gd;
+    if(!("Notification" in window)){toast("Este navegador no admite notificaciones.");return}
+    toast("Activando avisos…");
+    stage(askPerm(),20000,"permiso de notificaciones").then(function(perm){
+      if(perm!=="granted")throw new Error(perm==="denied"?"permiso denegado; actívalo en Ajustes de Android → Aplicaciones → Ágoge (y Chrome) → Notificaciones":"no se pudo pedir el permiso ("+perm+")");
+      return stage(navigator.serviceWorker.register("./sw.js").then(function(){return navigator.serviceWorker.ready}),15000,"servicio en segundo plano");
+    }).then(function(reg){
+      return stage(reg.pushManager.getSubscription().then(function(sub){return sub||reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:u8(CFG.vapidPublicKey)})}),20000,"suscripción push");
     }).then(function(sub){
       var j=sub.toJSON();
-      return sb.from("agoge_push").upsert({endpoint:j.endpoint,user_id:user.id,p256dh:j.keys.p256dh,auth:j.keys.auth,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Paris",am:am,pm:pm,guard:gd});
+      return stage(sb.from("agoge_push").upsert({endpoint:j.endpoint,user_id:user.id,p256dh:j.keys.p256dh,auth:j.keys.auth,tz:Intl.DateTimeFormat().resolvedOptions().timeZone||"Europe/Paris",am:am,pm:pm,guard:gd}),15000,"guardado en el servidor");
     }).then(function(r){
-      if(r&&r.error){toast("No se pudo activar: "+r.error.message);return}
+      if(r&&r.error)throw new Error(r.error.message);
       S.push=true;save();render();toast("Avisos activados.");
-    });
-  }).catch(function(e){toast("No se pudo activar: "+(e&&e.message||"error"))});
+    }).catch(function(e){toast("No se pudo activar: "+(e&&e.message||"error"),9000)});
+  }catch(e){toast("No se pudo activar: "+(e&&e.message||"error"),9000)}
 }
 /* S.push viaja con la copia del servidor, pero la suscripción es de cada instalación:
    si este navegador no tiene ninguna, el interruptor vuelve a «desactivado». */
