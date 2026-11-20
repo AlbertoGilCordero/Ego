@@ -3,7 +3,7 @@
    Estos tres valores son públicos por diseño. NUNCA pongas aquí la clave privada VAPID
    ni la clave service_role de Supabase. */
 window.AGOGE_CONFIG={
-  supabaseUrl:"",
+  supabaseUrl:"https://khxnjdbisfpkpxpzxdlh.supabase.co",
   supabaseAnonKey:"",
-  vapidPublicKey:""
+  vapidPublicKey:"BOt4hbhhc14KWrT09zZfHLJzaKrFiTW_AWF2knZ8rrQHq7UwREZygenspO6HxtPgTjHOwY546NEDzPEWOzcBIlc"
 };
