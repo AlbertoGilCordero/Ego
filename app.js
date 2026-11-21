@@ -2,7 +2,7 @@
 (function(){
 "use strict";
 var P=window.AGOGE_PLAN,CFG=window.AGOGE_CONFIG||{};
-var VERSION="8 · 21 nov 00:15";
+var VERSION="9 · 21 nov 20:50";
 var RANKS=P.ranks,M=P.missions,ORDER=P.order,FIN=P.fin,PROMPTS=P.prompts,AGON=P.agon,EIC=P.deadline,MIN_DAY=P.minDay;
 
 /* ---------- estado ---------- */
@@ -16,7 +16,10 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"']/g,function(c){retur
 function lvl(){var l=0;for(var i=0;i<RANKS.length;i++)if(S.xp>=RANKS[i][1])l=i;return l}
 function tier(){var l=lvl();return l<2?0:l<4?1:2}
 function target(k){return M[k].base[tier()]}
-function total(d){var t=0;ORDER.forEach(function(k){t+=d.m[k]||0});return t}
+function total(d){var t=0;ORDER.forEach(function(k){if(!M[k].kind)t+=d.m[k]||0});return t}
+function cnt(d,k){return (d.c&&d.c[k])||0}
+function notes(d,k){var a=(d.n&&d.n[k])||[],o=[];for(var i=0;i<(M[k].n||3);i++)o.push(a[i]||"");return o}
+function filled(d,k){return notes(d,k).filter(function(x){return x.trim()}).length}
 function weekNo(){var a=new Date(S.created+"T00:00:00"),b=new Date();return Math.max(0,Math.floor((b-a)/6048e5))}
 function isoWeek(){var d=new Date();var o=new Date(d.getFullYear(),0,1);return d.getFullYear()+"-"+Math.ceil(((d-o)/864e5+o.getDay()+1)/7)}
 
@@ -61,20 +64,47 @@ function header(){
 /* ---------- HOY ---------- */
 function videoLang(){var g=new Date().getDay();return g===0?null:g===6?"el idioma que elijas":(g%2===1?"francés":"inglés")}
 function mission(k){
-  var d=day(),m=M[k],tg=target(k),mn=d.m[k]||0,done=!!d.done[k],run=S.timer&&S.timer.k===k,desc=m.d;
-  if(k==="voz"){var vl=videoLang();desc=(vl?"Hoy en "+vl+". ":"")+PROMPTS[(new Date().getDate())%PROMPTS.length]}
+  var d=day(),m=M[k],tg=target(k),mn=d.m[k]||0,done=!!d.done[k],run=S.timer&&S.timer.k===k,desc=m.d,right,pct;
+  if(k==="voz"){var vl=videoLang(),nw=M.pulso?notes(d,"pulso").filter(function(x){return x.trim()}):[];
+    desc=(vl?"Hoy en "+vl+". ":"")+(nw.length>=3?"Cuenta tus tres noticias de Pulso: "+nw.join(" · ")+".":PROMPTS[(new Date().getDate())%PROMPTS.length]+(M.pulso?" Si ya anotaste tus tres noticias de Pulso, cuéntalas aquí.":""))}
   if(k==="capital")desc="Semana "+(Math.min(11,weekNo())+1)+" de 12: "+FIN[Math.min(11,weekNo())]+".";
   if(k==="obra"){var left=Math.ceil((EIC-new Date())/864e5);desc=m.d+(left>0?" Quedan "+left+" días para el 25 de febrero.":"")}
-  var h='<section class="slab'+(done?" done":"")+'"><div class="mrow"><img class="micon ink" alt="" src="art/i-'+k+'.webp" onerror="this.remove()"><div class="grow"><div class="row"><div class="mtitle">'+m.t.toUpperCase()+(done?" ✓":"")+'</div><div class="mins" id="mins-'+k+'">'+(k==="voz"?(done?"hecho":""):mn+" / "+tg+" min")+'</div></div><div class="mdesc">'+esc(desc)+'</div>';
-  if(k!=="voz")h+='<div class="prog"><i style="width:'+Math.min(100,mn/tg*100)+'%"></i></div>';
+  if(m.kind==="count"){var c=cnt(d,k);right=c+" / "+tg+" "+m.unit;pct=c/tg*100}
+  else if(m.kind==="notes"){var f=filled(d,k);right=f+" / "+m.n;pct=f/m.n*100}
+  else if(k==="voz"){right=done?"hecho":"";pct=null}
+  else{right=mn+" / "+tg+" min";pct=mn/tg*100}
+  var h='<section class="slab'+(done?" done":"")+'"><div class="mrow"><img class="micon ink" alt="" src="art/i-'+k+'.webp" onerror="this.remove()"><div class="grow"><div class="row"><div class="mtitle">'+m.t.toUpperCase()+(done?" ✓":"")+'</div><div class="mins" id="mins-'+k+'">'+right+'</div></div><div class="mdesc">'+esc(desc)+'</div>';
+  if(pct!==null)h+='<div class="prog"><i style="width:'+Math.min(100,pct)+'%"></i></div>';
+  if(m.kind==="notes"){notes(d,k).forEach(function(v,i){h+=field('<input type="text" id="n-'+k+'-'+i+'" data-note="'+k+'" data-i="'+i+'" value="'+esc(v)+'" placeholder="Noticia '+(i+1)+'" aria-label="Noticia '+(i+1)+'">','n-'+k+'-'+i)})}
   h+='<div class="btns">';
   if(k==="voz"){h+=done?'':'<button class="btn solid" data-act="done" data-k="voz">Grabado</button>'}
+  else if(m.kind==="count"){
+    h+='<button class="btn'+(done?" ghost":" solid")+'" data-act="cplus" data-k="'+k+'" data-n="'+m.step+'">+'+m.step+' '+m.unit+'</button><button class="btn ghost" data-act="cplus" data-k="'+k+'" data-n="1">+1</button>';
+    if(cnt(d,k)>0)h+='<button class="btn ghost" data-act="cplus" data-k="'+k+'" data-n="-1">−1</button>';
+    if(!done)h+='<button class="btn ghost" data-act="done" data-k="'+k+'">Hecho</button>';
+  }
+  else if(m.kind==="notes"){h+=done?'':'<button class="btn solid" data-act="done" data-k="'+k+'">Anotadas</button>'}
   else{
     h+=run?'<button class="btn solid" data-act="stop">Parar · <span id="clock">0:00</span></button>':'<button class="btn'+(done?" ghost":" solid")+'" data-act="start" data-k="'+k+'">'+(mn?"Seguir":"Empezar")+'</button>';
     if(!run)h+='<button class="btn ghost" data-act="plus" data-k="'+k+'">+10 min</button>';
     if(!done&&!run)h+='<button class="btn ghost" data-act="done" data-k="'+k+'">Hecho</button>';
   }
   return h+'</div></div></div></section>';
+}
+/* ---------- dictado por voz ---------- */
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition,rec=null,recId=null;
+function field(html,id){return SR?'<div class="dict">'+html+'<button type="button" class="mic'+(recId===id?" on":"")+'" data-act="mic" data-for="'+id+'" aria-label="Dictar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0M12 18v3M8.5 21h7"/></svg></button></div>':html}
+function micMark(){var bs=document.querySelectorAll(".mic");for(var i=0;i<bs.length;i++)bs[i].classList.toggle("on",bs[i].dataset.for===recId)}
+function dictate(id){
+  if(rec){var same=recId===id;try{rec.stop()}catch(e){}rec=null;recId=null;micMark();if(same)return}
+  var el=document.getElementById(id);if(!el||!SR)return;
+  var base=el.value?el.value.replace(/\s+$/,"")+" ":"",r=new SR(),got=false;
+  r.lang=id==="say"?({es:"es-ES",fr:"fr-FR",en:"en-US"}[S.lang]||"es-ES"):"es-ES";r.interimResults=true;r.continuous=false;r.maxAlternatives=1;
+  r.onresult=function(ev){var t="";for(var i=0;i<ev.results.length;i++)t+=ev.results[i][0].transcript;got=true;
+    var e2=document.getElementById(id);if(!e2)return;t=t.replace(/^\s+/,"");e2.value=base+(base?t:t.charAt(0).toUpperCase()+t.slice(1));e2.dispatchEvent(new Event("input",{bubbles:true}))};
+  r.onerror=function(ev){var c=ev.error;if(c==="not-allowed"||c==="service-not-allowed")toast("Permiso de micrófono denegado. Actívalo en Ajustes de Android → Aplicaciones → Chrome → Permisos.",7000);else if(c==="no-speech")toast("No he oído nada. Pulsa el micrófono y habla.");else if(c!=="aborted")toast("Dictado no disponible: "+c,5000)};
+  r.onend=function(){if(rec===r){rec=null;recId=null;micMark();if(got)toast("Dictado añadido. Pulsa otra vez para seguir.")}};
+  try{r.start();rec=r;recId=id;micMark();toast("Escuchando… habla y haz una pausa al terminar.",4000)}catch(e){toast("No se pudo iniciar el dictado.")}
 }
 var IC={flame:'<path d="M12 21c-3.6 0-6-2.4-6-5.6 0-2.6 1.7-4.2 3-6 .9-1.3 1.4-2.8 1.2-5.4 2.6 1.3 4.3 3.6 4.6 6.2.9-.5 1.5-1.3 1.8-2.3 1.3 1.7 2.4 3.9 2.4 6.6 0 3.8-2.8 6.5-7 6.5z"/>',clock:'<circle cx="12" cy="13.5" r="7.5"/><path d="M12 9.5v4l2.5 2M9.5 3h5M12 3v3"/>',shield:'<path d="M12 3l7.5 2.5v6c0 4.5-3 8-7.5 9.5-4.5-1.5-7.5-5-7.5-9.5v-6z"/>',glass:'<path d="M6.5 3h11M6.5 21h11M7.5 3c0 5 4.5 6 4.5 9s-4.5 4-4.5 9M16.5 3c0 5-4.5 6-4.5 9s4.5 4 4.5 9"/>',cal:'<rect x="4" y="5" width="16" height="15" rx="1.5"/><path d="M4 9.5h16M8 3v4M16 3v4M8 13h2M14 13h2M8 16.5h2"/>'};
 function ico(n){return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" stroke-linecap="round" aria-hidden="true">'+IC[n]+'</svg>'}
@@ -103,7 +133,7 @@ function viewHoy(){
   h+='<section class="slab deco-cerebro"><div class="row"><h2>REVISIÓN DE LA NOCHE</h2><span class="eyebrow">+15 XP</span></div>';
   var dr=d.rev||d.revDraft||{};
   h+='<p class="mdesc" style="margin-top:6px">'+(d.rev?"Guardada. Puedes cambiarla hasta medianoche; el día se cierra solo a las 00:00.":"El día se cierra solo a las 00:00. Escribe la revisión cuando quieras antes.")+'</p>';
-  h+='<label for="rv1">¿Qué hice bien hoy?</label><textarea id="rv1">'+esc(dr.good||"")+'</textarea><label for="rv2">¿Qué corrijo mañana?</label><textarea id="rv2">'+esc(dr.fix||"")+'</textarea><label for="rv3">Mañana, lo primero que hago es…</label><input type="text" id="rv3" value="'+esc(dr.first||"")+'" placeholder="Si son las 9:00, entonces abro el EIC y escribo la sección 1"><label for="rv4">¿Hoy sin videojuegos, TikTok ni anime?</label><select id="rv4"><option value="1">Sí, día limpio</option><option value="0"'+(dr.clean===false?" selected":"")+'>No, he caído</option></select><div class="btns"><button class="btn solid" data-act="review">'+(d.rev?"Guardar cambios":"Guardar revisión")+'</button></div>';
+  h+='<label for="rv1">¿Qué hice bien hoy?</label>'+field('<textarea id="rv1">'+esc(dr.good||"")+'</textarea>',"rv1")+'<label for="rv2">¿Qué corrijo mañana?</label>'+field('<textarea id="rv2">'+esc(dr.fix||"")+'</textarea>',"rv2")+'<label for="rv3">Mañana, lo primero que hago es…</label>'+field('<input type="text" id="rv3" value="'+esc(dr.first||"")+'" placeholder="Si son las 9:00, entonces abro el EIC y escribo la sección 1">',"rv3")+'<label for="rv4">¿Hoy sin videojuegos, TikTok ni anime?</label><select id="rv4"><option value="1">Sí, día limpio</option><option value="0"'+(dr.clean===false?" selected":"")+'>No, he caído</option></select><div class="btns"><button class="btn solid" data-act="review">'+(d.rev?"Guardar cambios":"Guardar revisión")+'</button></div>';
   h+='</section>';
   return h;
 }
@@ -112,14 +142,14 @@ function viewHoy(){
 function viewSenda(){
   var st=streakInfo(),tot=0,per={},n=0,h="";
   ORDER.forEach(function(k){per[k]=0});
-  Object.keys(S.days).forEach(function(k){var r=S.days[k];ORDER.forEach(function(q){per[q]+=r.m[q]||0});var t=total(r);tot+=t;if(t>0)n++});
+  Object.keys(S.days).forEach(function(k){var r=S.days[k];ORDER.forEach(function(q){per[q]+=M[q].kind==="count"?cnt(r,q):(r.m[q]||0)});var t=total(r);tot+=t;if(t>0)n++});
   h+='<div class="stats"><div class="stat"><b>'+st.best+'</b><span>'+ico("flame")+'Mejor racha</span></div><div class="stat"><b>'+Math.round(tot/60)+'</b><span>'+ico("glass")+'Horas</span></div><div class="stat"><b>'+cleanRun()+'</b><span>'+ico("cal")+'Días limpios</span></div></div>';
   h+='<section class="slab"><h2>ÚLTIMOS 28 DÍAS</h2><div class="heat">';
   var d=new Date();d.setDate(d.getDate()-27);
   for(var i=0;i<28;i++){var r=S.days[key(d)],t=r?total(r):0,a=Math.min(1,t/180);h+='<i title="'+key(d)+': '+t+' min" style="background:rgba(63,41,23,'+(t?0.12+a*0.78:0)+')"></i>';d.setDate(d.getDate()+1)}
   h+='</div><p class="mdesc" style="margin-top:8px">Cuanto más cargada la tinta, más minutos de trabajo ese día.</p></section>';
   h+='<section class="slab"><h2>HORAS POR PILAR</h2><div class="list" style="gap:0">';
-  ORDER.forEach(function(k){if(k==="voz")return;h+='<div class="pillar"><img class="ink" alt="" src="art/i-'+k+'.webp"><span>'+M[k].t+'</span><span class="mins">'+(per[k]/60).toFixed(1)+' h</span></div>'});
+  ORDER.forEach(function(k){if(k==="voz"||M[k].kind==="notes")return;h+='<div class="pillar"><img class="ink" alt="" src="art/i-'+k+'.webp" onerror="this.remove()"><span>'+M[k].t+'</span><span class="mins">'+(M[k].kind==="count"?per[k]+" "+M[k].unit:(per[k]/60).toFixed(1)+" h")+'</span></div>'});
   h+='</div></section>';
   h+='<section class="slab"><h2>RANGOS</h2><div class="ladder">';var l=lvl();
   RANKS.forEach(function(r,i){h+='<div class="rung'+(i===l?" now":i<l?" past":"")+'"><img class="ink" alt="" src="art/r'+i+'.webp"><b>'+(i+1)+'. '+r[0]+'</b><span>'+r[1]+' XP</span></div>'});
@@ -134,14 +164,14 @@ function viewMentor(){
   if(!S.chat.length)h+='<div class="msg m">Estoy aquí. Dime cómo vas hoy, sin adornos, y decidimos el siguiente paso.</div>';
   S.chat.forEach(function(c){h+='<div class="msg '+(c.r==="u"?"u":"m")+'">'+esc(c.t)+'</div>'});
   h+='</div><div class="chips">';CHIPS.forEach(function(c){h+='<button class="chip" data-act="chip" data-k="'+esc(c)+'">'+c+'</button>'});
-  h+='</div><div class="send"><textarea id="say" placeholder="Escribe a Mentor…" aria-label="Mensaje"></textarea><button class="btn solid" data-act="say">Enviar</button></div>';
+  h+='</div><div class="send">'+field('<textarea id="say" placeholder="Escribe o dicta a Mentor…" aria-label="Mensaje"></textarea>',"say")+'<button class="btn solid" data-act="say">Enviar</button></div>';
   return h;
 }
 function ctx(){
   var d=day(),st=streakInfo(),now=new Date();
   return{minutes:total(d),min:MIN_DAY,streak:st.s,shields:st.sh,rank:RANKS[lvl()][0],clean:cleanRun(),sos:d.sos,first:S.first||"",hour:now.getHours(),dow:now.getDay(),rev:!!d.rev,
     eic:Math.ceil((EIC-now)/864e5),
-    pending:ORDER.filter(function(k){return !d.done[k]}).map(function(k){return{k:k,t:M[k].t,left:k==="voz"?3:Math.max(1,target(k)-(d.m[k]||0))}})};
+    pending:ORDER.filter(function(k){return !d.done[k]}).map(function(k){return{k:k,t:M[k].t,left:k==="voz"?3:M[k].kind?10:Math.max(1,target(k)-(d.m[k]||0))}})};
 }
 function say(text){
   text=(text||"").trim();if(!text)return;
@@ -249,7 +279,7 @@ function exportText(){
   var st=streakInfo(),out=["ÁGOGE · resumen al "+today(),"Rango: "+RANKS[lvl()][0]+" ("+S.xp+" XP). Racha: "+st.s+" (mejor "+st.best+"). Escudos: "+st.sh+". Días limpios seguidos: "+cleanRun()+".","Fecha | min totales | "+ORDER.join(" ")+" | amanecer | revisión | limpio | SOS"],d=new Date();
   d.setDate(d.getDate()-13);
   for(var i=0;i<14;i++){var k=key(d),r=S.days[k];
-    if(r)out.push(k+" | "+total(r)+" | "+ORDER.map(function(q){return r.m[q]||0}).join(" ")+" | "+(r.amxp?"sí":"no")+" | "+(r.rev?"sí":"no")+" | "+(r.rev?(r.rev.clean?"sí":"no"):"-")+" | "+(r.sos||0)+(r.rev&&r.rev.fix?" | corregir: "+r.rev.fix:""));
+    if(r)out.push(k+" | "+total(r)+" | "+ORDER.map(function(q){return M[q].kind==="count"?cnt(r,q):M[q].kind==="notes"?filled(r,q):(r.m[q]||0)}).join(" ")+" | "+(r.amxp?"sí":"no")+" | "+(r.rev?"sí":"no")+" | "+(r.rev?(r.rev.clean?"sí":"no"):"-")+" | "+(r.sos||0)+(r.rev&&r.rev.fix?" | corregir: "+r.rev.fix:""));
     else out.push(k+" | sin datos");d.setDate(d.getDate()+1)}
   return out.join("\n");
 }
@@ -333,7 +363,13 @@ document.addEventListener("click",function(e){
   if(a==="start"){if(S.timer)stopTimer();S.timer={k:k,s:Date.now()};save()}
   else if(a==="stop")stopTimer();
   else if(a==="plus")addMin(k,10);
-  else if(a==="done"){if(k==="voz"){d.m.voz=10}else d.m[k]=Math.max(d.m[k]||0,target(k));complete(k,d);save()}
+  else if(a==="mic"){dictate(b.dataset.for);return}
+  else if(a==="cplus"){d.c=d.c||{};d.c[k]=Math.max(0,Math.min(2000,cnt(d,k)+Number(b.dataset.n)));if(d.c[k]>=target(k))complete(k,d);save()}
+  else if(a==="done"){
+    if(M[k].kind==="notes"){if(filled(d,k)<M[k].n){toast("Anota las "+M[k].n+" antes. De memoria, sin mirar.");return}}
+    else if(M[k].kind==="count"){d.c=d.c||{};d.c[k]=Math.max(cnt(d,k),target(k))}
+    else if(k==="voz"){d.m.voz=10}else d.m[k]=Math.max(d.m[k]||0,target(k));
+    complete(k,d);save()}
   else if(a==="am"){d.am[k]=!d.am[k];if(d.am.phone&&d.am.light&&d.am.water&&!d.amxp){d.amxp=true;addXP(15,"Amanecer")}save()}
   else if(a==="agon"){var w=isoWeek();S.agon[w]=S.agon[w]||[];S.agon[w][+k]=!S.agon[w][+k];if([0,1,2].every(function(i){return S.agon[w][i]})&&!S.agon[w+"x"]){S.agon[w+"x"]=true;addXP(50,"Agón ganado")}save()}
   else if(a==="reopen"){if(d.rev){d.revDraft=d.rev;d.revPaid=true;delete d.rev;save()}}
@@ -355,6 +391,9 @@ document.addEventListener("click",function(e){
   render();
 });
 document.addEventListener("change",function(e){if(e.target.id==="lang"){S.lang=e.target.value;save()}});
+/* Los apuntes (noticias) se guardan según se escriben o se dictan, sin redibujar la pantalla. */
+document.addEventListener("input",function(e){var t=e.target;if(!t.dataset||!t.dataset.note)return;var d=day(),k=t.dataset.note;d.n=d.n||{};d.n[k]=notes(d,k);d.n[k][Number(t.dataset.i)]=t.value.slice(0,200);save();
+  var el=document.getElementById("mins-"+k);if(el)el.textContent=filled(d,k)+" / "+M[k].n});
 
 /* ---------- render ---------- */
 function render(){

@@ -20,3 +20,5 @@ App personal de Alberto (PWA en GitHub Pages + Supabase). Sin IA dentro de la ap
 - Proyecto Supabase: `khxnjdbisfpkpxpzxdlh` ("Agoge", eu-west-1). Tablas `agoge_state`, `agoge_push` y `agoge_secrets` (claves VAPID y CRON_SECRET; la función las lee de ahí si no hay secretos de Edge Functions). Tarea pg_cron `agoge-notify` cada 10 min. La función `notify` se despliega con el conector de Supabase pegando el archivo completo.
 - App publicada en `https://albertogilcordero.github.io/Ego/`.
 - `VERSION` (al principio de `app.js`) se muestra al final del Códice: súbela en cada cambio de la app, junto con `CACHE` en `sw.js`, para poder comprobar qué versión tiene el teléfono.
+- Tipos de misión en `plan.js`: sin `kind` = minutos con temporizador (cuentan para `minDay`); `kind:"count"` = unidades (`unit`, `step`; se guardan en `days[fecha].c`); `kind:"notes"` = `n` apuntes de texto (en `days[fecha].n`). Lectura (app Códice) y Pulso (app Pulso) son de estos tipos y no suman minutos. Voz usa las noticias de Pulso como tema cuando están anotadas.
+- Dictado: `field(html,id)` añade el botón de micrófono (Web Speech API) a un campo; solo aparece si el navegador lo admite.
